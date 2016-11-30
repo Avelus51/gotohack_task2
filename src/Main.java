@@ -36,10 +36,11 @@ public class Main {
     static class AbilityToReturn implements Comparable<AbilityToReturn>{
         int stepId;
         double returnRate;
+        double returns;
+        double uniqueVisitors;
 
-        public AbilityToReturn(int stepId, double returnRate) {
+        public AbilityToReturn(int stepId) {
             this.stepId = stepId;
-            this.returnRate = returnRate;
         }
 
         @Override
@@ -75,9 +76,7 @@ public class Main {
                     return Integer.compare(stepPosition1, stepPosition2);
                 } else return Integer.compare(lessonPosition1, lessonPosition2);
             } else return Integer.compare(modulePosition1, modulePosition2);
-
         });
-
         Map<Integer, Integer> stepsIndices = new HashMap<>();
         for (int i = 0; i < steps.size(); i++) {
             int stepId = Integer.parseInt(steps.get(i)[StructureIndices.STEP_ID.ordinal()]);
@@ -95,44 +94,41 @@ public class Main {
             events.add(scanner.nextLine().split(","));
         }
         Collections.reverse(events);
+        List<AbilityToReturn> abilityToReturnList = new ArrayList<>();
+        List<Set<Integer>> returnedVisitors = new ArrayList<>();
+        for (int i = 0; i < steps.size()-1 ; i++) {
+            int stepIndex = Integer.parseInt(steps.get(i)[StructureIndices.STEP_ID.ordinal()]);
+            abilityToReturnList.add(new AbilityToReturn(stepIndex));
+            returnedVisitors.add(new HashSet<>());
+        }
         events.forEach(e -> {
             int userId = Integer.parseInt(e[EventIndices.USER_ID.ordinal()]);
             int stepId = Integer.parseInt(e[EventIndices.STEP_ID.ordinal()]);
+            int stepIndex = stepsIndices.get(stepId);
             long time = Long.parseLong(e[EventIndices.TIME.ordinal()]);
-            Map<Integer, VisitTime> stepVisits = visits.get(stepsIndices.get(stepId));
+
+            Map<Integer, VisitTime> stepVisits = visits.get(stepIndex);
             if (stepVisits.containsKey(userId)) {
                 stepVisits.get(userId).last=time;
             } else {
                 stepVisits.put(userId, new VisitTime(time, time));
             }
-        });
-        Map<Integer, Double> abilityToReturnMap = new HashMap<>();
-        for (int i = 0; i < visits.size()-1; i++) {
-            for (Map.Entry<Integer, VisitTime> stepVisitCharacteristics : visits.get(i).entrySet()) {
-                int userId = stepVisitCharacteristics.getKey();
-                long firstVisitStepTime = stepVisitCharacteristics.getValue().first;
-                long lastVisitStepTime = stepVisitCharacteristics.getValue().last;
-                if (visits.get(i+1).get(userId) == null) {
-                    break;
-                }
-                long firstVisitNextStepTime = visits.get(i+1).get(userId).first;
-                if (firstVisitNextStepTime < lastVisitStepTime
-                        && firstVisitNextStepTime > firstVisitStepTime) {
-                    if (abilityToReturnMap.containsKey(i)) {
-                        abilityToReturnMap.put(i, abilityToReturnMap.get(i) + 1);
-                    } else {
-                        abilityToReturnMap.put(i, 0d);
-                    }
+            if (stepIndex < steps.size() - 1 && visits.get(stepIndex+1).containsKey(userId)) {
+                long timeOfNextStepLastVisiting = visits.get(stepIndex+1).get(userId).last;
+                if (!returnedVisitors.get(stepIndex).contains(userId)
+                        &&timeOfNextStepLastVisiting > stepVisits.get(userId).first
+                        &&timeOfNextStepLastVisiting < stepVisits.get(userId).last) {
+                    abilityToReturnList.get(stepIndex).returns++;
+                    returnedVisitors.get(stepIndex).add(userId);
                 }
             }
-        }
-        List<AbilityToReturn> abilityToReturnList = new ArrayList<>();
-        abilityToReturnMap.forEach((stepIndex, returns) -> {
-            int stepId = Integer.parseInt(steps.get(stepIndex)[StructureIndices.STEP_ID.ordinal()]);
-            double stepVisits = visits.get(stepIndex).size();
-            abilityToReturnList.add(new AbilityToReturn(stepId, returns/stepVisits));
         });
-        Collections.sort(abilityToReturnList, Comparator.reverseOrder());
+        for (int i = 0; i < steps.size() - 1 ; i++) {
+            AbilityToReturn abilityToReturn = abilityToReturnList.get(i);
+            abilityToReturn.uniqueVisitors = visits.get(i).size();
+            abilityToReturn.returnRate = abilityToReturn.returns/abilityToReturn.uniqueVisitors;
+        }
+
         System.out.println(abilityToReturnList.stream()
                 .sorted(Comparator.reverseOrder())
                 .limit(10)
